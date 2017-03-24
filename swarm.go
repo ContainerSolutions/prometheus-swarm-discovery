@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
@@ -16,6 +17,7 @@ import (
 )
 
 var prometheusService string
+var discoveryInterval int
 
 // allocateIP returns the 3rd last IP in the network range.
 func allocateIP(netCIDR *net.IPNet) string {
@@ -109,8 +111,7 @@ type scrapeTarget struct {
 	Labels  map[string]string
 }
 
-func discoverSwarm(cmd *cobra.Command, args []string) {
-	findPrometheusContainer(prometheusService)
+func discoverSwarm() {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		panic(err)
@@ -159,15 +160,23 @@ func discoverSwarm(cmd *cobra.Command, args []string) {
 	writeSDConfig(scrapeTargets)
 }
 
+func discoveryProcess(cmd *cobra.Command, args []string) {
+	for {
+		discoverSwarm()
+		time.Sleep(time.Duration(discoveryInterval) * time.Second)
+	}
+}
+
 func main() {
 
 	var cmdDiscover = &cobra.Command{
 		Use:   "discover",
 		Short: "Starts Swarm service discovery",
-		Run:   discoverSwarm,
+		Run:   discoveryProcess,
 	}
 
 	cmdDiscover.Flags().StringVarP(&prometheusService, "prometheus", "p", "prometheus", "Name of the Prometheus service")
+	cmdDiscover.Flags().IntVarP(&discoveryInterval, "interval", "i", 30, "The interval, in seconds, at which the discovery process is kicked off")
 
 	var rootCmd = &cobra.Command{Use: "promswarm"}
 	rootCmd.AddCommand(cmdDiscover)

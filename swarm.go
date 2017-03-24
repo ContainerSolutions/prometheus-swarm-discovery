@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
@@ -98,19 +97,10 @@ func discoverSwarm(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 
-	networkFilters := filters.NewArgs()
-	networkFilters.Add("driver", "overlay")
+	taskFilters := filters.NewArgs()
+	taskFilters.Add("desired-state", string(swarm.TaskStateRunning))
 
-	networks, err := cli.NetworkList(context.Background(), types.NetworkListOptions{Filters: networkFilters})
-	if err != nil {
-		panic(err)
-	}
-
-	for _, network := range networks {
-		fmt.Printf("Network %s %s %s\n", network.ID, network.Name, network.Scope)
-	}
-
-	tasks, err := cli.TaskList(context.Background(), types.TaskListOptions{})
+	tasks, err := cli.TaskList(context.Background(), types.TaskListOptions{Filters: taskFilters})
 	if err != nil {
 		panic(err)
 	}
@@ -119,15 +109,29 @@ func discoverSwarm(cmd *cobra.Command, args []string) {
 	taskNetworks := make(map[string]swarm.Network)
 
 	for _, task := range tasks {
-		fmt.Printf("Task %s %s\n", task.ID, task.Name)
 		taskRaw, _, err := cli.TaskInspectWithRaw(context.Background(), task.ID)
 		if err != nil {
 			panic(err)
 		}
-		if len(taskRaw.NetworksAttachments) > 0 {
-			containerIP := strings.Split(taskRaw.NetworksAttachments[0].Addresses[0], "/")[0]
-			taskNetworks[taskRaw.NetworksAttachments[0].Network.ID] = taskRaw.NetworksAttachments[0].Network
-			scrapeTargets = append(scrapeTargets, scrapeTarget{Targets: []string{containerIP}, Labels: map[string]string{"labelname": "value"}})
+
+		var containerIPs []string
+
+		for _, netatt := range taskRaw.NetworksAttachments {
+			if netatt.Network.Spec.Name == "ingress" || netatt.Network.DriverState.Name != "overlay" {
+				continue
+			}
+
+			for _, ipcidr := range netatt.Addresses {
+				ip, _, err := net.ParseCIDR(ipcidr)
+				if err != nil {
+					panic(err)
+				}
+				containerIPs = append(containerIPs, ip.String())
+			}
+
+			fmt.Printf("Task %s %s\n", task.ID, containerIPs)
+			taskNetworks[netatt.Network.ID] = netatt.Network
+			scrapeTargets = append(scrapeTargets, scrapeTarget{Targets: containerIPs, Labels: map[string]string{"labelname": "value"}})
 		}
 	}
 

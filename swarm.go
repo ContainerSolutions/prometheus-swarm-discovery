@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"time"
 
+	"os"
+
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -18,6 +20,8 @@ import (
 
 var prometheusService string
 var discoveryInterval int
+var logLevel string
+var logger = logrus.New()
 
 // allocateIP returns the 3rd last IP in the network range.
 func allocateIP(netCIDR *net.IPNet) string {
@@ -58,7 +62,7 @@ func connectNetworks(networks map[string]swarm.Network, containerID string) {
 			panic(err)
 		}
 		prometheusIP := allocateIP(netCIDR)
-		fmt.Println("Connecting network ", netwrk.Spec.Name, "(", netCIDR.IP, ") to ", containerID, "(", prometheusIP, ")")
+		logger.Info("Connecting network ", netwrk.Spec.Name, "(", netCIDR.IP, ") to ", containerID, "(", prometheusIP, ")")
 		netconfig := &network.EndpointSettings{
 			IPAMConfig: &network.EndpointIPAMConfig{
 				IPv4Address: prometheusIP,
@@ -80,7 +84,7 @@ func writeSDConfig(scrapeTargets []scrapeTarget) {
 		panic(err)
 	}
 
-	fmt.Println("Writing config file.")
+	logger.Debug("Writing Prometheus config file")
 
 	err = ioutil.WriteFile("swarm-endpoints.json", jsonScrapeConfig, 0644)
 	if err != nil {
@@ -149,7 +153,7 @@ func discoverSwarm() {
 				containerIPs = append(containerIPs, ip.String())
 			}
 
-			fmt.Printf("Task %s %s\n", task.ID, containerIPs)
+			logger.Debugf("Found task %s with IPs %s", task.ID, containerIPs)
 			taskNetworks[netatt.Network.ID] = netatt.Network
 			scrapeTargets = append(scrapeTargets, scrapeTarget{Targets: containerIPs, Labels: map[string]string{"labelname": "value"}})
 		}
@@ -161,6 +165,22 @@ func discoverSwarm() {
 }
 
 func discoveryProcess(cmd *cobra.Command, args []string) {
+
+	if logLevel == "debug" {
+		logger.Level = logrus.DebugLevel
+	} else if logLevel == "info" {
+		logger.Level = logrus.InfoLevel
+	} else if logLevel == "warn" {
+		logger.Level = logrus.WarnLevel
+	} else if logLevel == "error" {
+		logger.Level = logrus.ErrorLevel
+	} else {
+		logger.Fatal("Invalid log level: ", logLevel)
+		os.Exit(1)
+	}
+
+	logger.Info("Starting service discovery process using Prometheus service [", prometheusService, "]")
+
 	for {
 		discoverSwarm()
 		time.Sleep(time.Duration(discoveryInterval) * time.Second)
@@ -177,6 +197,7 @@ func main() {
 
 	cmdDiscover.Flags().StringVarP(&prometheusService, "prometheus", "p", "prometheus", "Name of the Prometheus service")
 	cmdDiscover.Flags().IntVarP(&discoveryInterval, "interval", "i", 30, "The interval, in seconds, at which the discovery process is kicked off")
+	cmdDiscover.Flags().StringVarP(&logLevel, "loglevel", "l", "info", "Specify log level: debug, info, warn, error")
 
 	var rootCmd = &cobra.Command{Use: "promswarm"}
 	rootCmd.AddCommand(cmdDiscover)

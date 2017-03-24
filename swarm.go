@@ -133,14 +133,10 @@ func discoverSwarm(prometheusContainerID string) {
 	taskNetworks := make(map[string]swarm.Network)
 
 	for _, task := range tasks {
-		taskRaw, _, err := cli.TaskInspectWithRaw(context.Background(), task.ID)
-		if err != nil {
-			panic(err)
-		}
 
 		var containerIPs []string
 
-		for _, netatt := range taskRaw.NetworksAttachments {
+		for _, netatt := range task.NetworksAttachments {
 			if netatt.Network.Spec.Name == "ingress" || netatt.Network.DriverState.Name != "overlay" {
 				continue
 			}

@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var prometheusContainerID = "b171793f9e26"
+var prometheusService string
 
 // allocateIP returns the 3rd last IP in the network range.
 func allocateIP(netCIDR *net.IPNet) string {
@@ -29,13 +29,13 @@ func allocateIP(netCIDR *net.IPNet) string {
 	return allocIP.String()
 }
 
-func connectNetworks(networks map[string]swarm.Network) {
+func connectNetworks(networks map[string]swarm.Network, containerID string) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		panic(err)
 	}
 
-	prometheusContainer, err := cli.ContainerInspect(context.Background(), prometheusContainerID)
+	prometheusContainer, err := cli.ContainerInspect(context.Background(), containerID)
 	if err != nil {
 		panic(err)
 	}
@@ -56,14 +56,14 @@ func connectNetworks(networks map[string]swarm.Network) {
 			panic(err)
 		}
 		prometheusIP := allocateIP(netCIDR)
-		fmt.Println("Connecting network ", netwrk.Spec.Name, "(", netCIDR.IP, ") to ", prometheusContainerID, "(", prometheusIP, ")")
+		fmt.Println("Connecting network ", netwrk.Spec.Name, "(", netCIDR.IP, ") to ", containerID, "(", prometheusIP, ")")
 		netconfig := &network.EndpointSettings{
 			IPAMConfig: &network.EndpointIPAMConfig{
 				IPv4Address: prometheusIP,
 			},
 		}
 
-		err = cli.NetworkConnect(context.Background(), netwrk.ID, prometheusContainerID, netconfig)
+		err = cli.NetworkConnect(context.Background(), netwrk.ID, containerID, netconfig)
 		if err != nil {
 			panic(err)
 		}
@@ -86,12 +86,31 @@ func writeSDConfig(scrapeTargets []scrapeTarget) {
 	}
 }
 
+func findPrometheusContainer(serviceName string) string {
+	cli, err := client.NewEnvClient()
+	if err != nil {
+		panic(err)
+	}
+
+	taskFilters := filters.NewArgs()
+	taskFilters.Add("desired-state", string(swarm.TaskStateRunning))
+	taskFilters.Add("service", serviceName)
+
+	promTasks, err := cli.TaskList(context.Background(), types.TaskListOptions{Filters: taskFilters})
+	if err != nil {
+		panic(err)
+	}
+
+	return promTasks[0].Status.ContainerStatus.ContainerID
+}
+
 type scrapeTarget struct {
 	Targets []string
 	Labels  map[string]string
 }
 
 func discoverSwarm(cmd *cobra.Command, args []string) {
+	findPrometheusContainer(prometheusService)
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		panic(err)
@@ -135,7 +154,8 @@ func discoverSwarm(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	connectNetworks(taskNetworks)
+	prometheusContainerID := findPrometheusContainer(prometheusService)
+	connectNetworks(taskNetworks, prometheusContainerID)
 	writeSDConfig(scrapeTargets)
 }
 
@@ -146,6 +166,8 @@ func main() {
 		Short: "Starts Swarm service discovery",
 		Run:   discoverSwarm,
 	}
+
+	cmdDiscover.Flags().StringVarP(&prometheusService, "prometheus", "p", "prometheus", "Name of the Prometheus service")
 
 	var rootCmd = &cobra.Command{Use: "promswarm"}
 	rootCmd.AddCommand(cmdDiscover)

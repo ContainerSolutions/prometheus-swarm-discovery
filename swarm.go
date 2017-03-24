@@ -9,6 +9,8 @@ import (
 
 	"strings"
 
+	"fmt"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
@@ -78,8 +80,8 @@ func connectNetworks(networks map[string]swarm.Network, containerID string) {
 
 }
 
-func writeSDConfig(scrapeTargets []scrapeTarget) {
-	jsonScrapeConfig, err := json.MarshalIndent(scrapeTargets, "", "  ")
+func writeSDConfig(scrapeTasks []scrapeTask) {
+	jsonScrapeConfig, err := json.MarshalIndent(scrapeTasks, "", "  ")
 	if err != nil {
 		panic(err)
 	}
@@ -110,7 +112,12 @@ func findPrometheusContainer(serviceName string) (string, error) {
 	return promTasks[0].Status.ContainerStatus.ContainerID, nil
 }
 
-type scrapeTarget struct {
+type scrapeService struct {
+	ServiceName string
+	scrapeTasks scrapeTask
+}
+
+type scrapeTask struct {
 	Targets []string
 	Labels  map[string]string
 }
@@ -121,15 +128,23 @@ func discoverSwarm(prometheusContainerID string) {
 		panic(err)
 	}
 
+	services, err := cli.ServiceList(context.Background(), types.ServiceListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	serviceIDMap := make(map[string]swarm.Service)
+	for _, service := range services {
+		serviceIDMap[service.ID] = service
+	}
+
 	taskFilters := filters.NewArgs()
 	taskFilters.Add("desired-state", string(swarm.TaskStateRunning))
-
 	tasks, err := cli.TaskList(context.Background(), types.TaskListOptions{Filters: taskFilters})
 	if err != nil {
 		panic(err)
 	}
 
-	var scrapeTargets []scrapeTarget
+	var scrapeTasks []scrapeTask
 	taskNetworks := make(map[string]swarm.Network)
 
 	for _, task := range tasks {
@@ -146,17 +161,29 @@ func discoverSwarm(prometheusContainerID string) {
 				if err != nil {
 					panic(err)
 				}
-				containerIPs = append(containerIPs, ip.String())
+				if len(serviceIDMap[task.ServiceID].Spec.EndpointSpec.Ports) > 0 {
+					for _, port := range serviceIDMap[task.ServiceID].Spec.EndpointSpec.Ports {
+						containerIPs = append(containerIPs, fmt.Sprintf("%s:%d", ip.String(), port.TargetPort))
+					}
+				} else {
+					containerIPs = append(containerIPs, ip.String())
+				}
 			}
 
 			logger.Debugf("Found task %s with IPs %s", task.ID, containerIPs)
 			taskNetworks[netatt.Network.ID] = netatt.Network
-			scrapeTargets = append(scrapeTargets, scrapeTarget{Targets: containerIPs, Labels: map[string]string{"labelname": "value"}})
+			scrapetask := scrapeTask{
+				Targets: containerIPs,
+				Labels: map[string]string{
+					"job": serviceIDMap[task.ServiceID].Spec.Name,
+				},
+			}
+			scrapeTasks = append(scrapeTasks, scrapetask)
 		}
 	}
 
 	connectNetworks(taskNetworks, prometheusContainerID)
-	writeSDConfig(scrapeTargets)
+	writeSDConfig(scrapeTasks)
 }
 
 func discoveryProcess(cmd *cobra.Command, args []string) {

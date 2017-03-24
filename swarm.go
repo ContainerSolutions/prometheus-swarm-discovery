@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"os"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
@@ -92,7 +92,7 @@ func writeSDConfig(scrapeTargets []scrapeTarget) {
 	}
 }
 
-func findPrometheusContainer(serviceName string) string {
+func findPrometheusContainer(serviceName string) (string, error) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		panic(err)
@@ -104,10 +104,10 @@ func findPrometheusContainer(serviceName string) string {
 
 	promTasks, err := cli.TaskList(context.Background(), types.TaskListOptions{Filters: taskFilters})
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
-	return promTasks[0].Status.ContainerStatus.ContainerID
+	return promTasks[0].Status.ContainerStatus.ContainerID, nil
 }
 
 type scrapeTarget struct {
@@ -115,7 +115,7 @@ type scrapeTarget struct {
 	Labels  map[string]string
 }
 
-func discoverSwarm() {
+func discoverSwarm(prometheusContainerID string) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		panic(err)
@@ -159,7 +159,6 @@ func discoverSwarm() {
 		}
 	}
 
-	prometheusContainerID := findPrometheusContainer(prometheusService)
 	connectNetworks(taskNetworks, prometheusContainerID)
 	writeSDConfig(scrapeTargets)
 }
@@ -176,14 +175,22 @@ func discoveryProcess(cmd *cobra.Command, args []string) {
 		logger.Level = logrus.ErrorLevel
 	} else {
 		logger.Fatal("Invalid log level: ", logLevel)
-		os.Exit(1)
 	}
 
 	logger.Info("Starting service discovery process using Prometheus service [", prometheusService, "]")
 
 	for {
-		discoverSwarm()
 		time.Sleep(time.Duration(discoveryInterval) * time.Second)
+		prometheusContainerID, err := findPrometheusContainer(prometheusService)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				logger.Warn("Service ", prometheusService, " not running yet.")
+				continue
+			}
+			logger.Fatal(err)
+		}
+
+		discoverSwarm(prometheusContainerID)
 	}
 }
 

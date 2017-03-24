@@ -151,6 +151,11 @@ func discoverSwarm(prometheusContainerID string) {
 
 		var containerIPs []string
 
+		if _, ok := task.Spec.ContainerSpec.Labels["prometheus.ignore"]; ok {
+			logger.Debugf("Task %s ignored by Prometheus", task.ID)
+			continue
+		}
+
 		for _, netatt := range task.NetworksAttachments {
 			if netatt.Network.Spec.Name == "ingress" || netatt.Network.DriverState.Name != "overlay" {
 				continue

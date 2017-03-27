@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net"
+	"reflect"
 	"time"
 
 	"strings"
@@ -24,6 +25,7 @@ var prometheusService string
 var discoveryInterval int
 var logLevel string
 var output string
+var clean bool
 var logger = logrus.New()
 
 // allocateIP returns the 3rd last IP in the network range.
@@ -111,6 +113,36 @@ func findPrometheusContainer(serviceName string) (string, error) {
 	}
 
 	return promTasks[0].Status.ContainerStatus.ContainerID, nil
+}
+
+func cleanNetworks(prometheusContainerID string) {
+	cli, err := client.NewEnvClient()
+
+	networkFilters := filters.NewArgs()
+	networkFilters.Add("driver", "overlay")
+	networks, err := cli.NetworkList(context.Background(), types.NetworkListOptions{Filters: networkFilters})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, network := range networks {
+		if network.Name == "ingress" {
+			continue
+		}
+
+		if len(network.Containers) == 1 && reflect.ValueOf(network.Containers).MapKeys()[0].String() == prometheusContainerID {
+			logger.Info("Network ", network.Name, " contains only the Prometheus container. Disconnecting and removing network.")
+			cli.NetworkDisconnect(context.Background(), network.ID, prometheusContainerID, true)
+			if err != nil {
+				logger.Error(err)
+			}
+			err := cli.NetworkRemove(context.Background(), network.ID)
+			if err != nil {
+				logger.Error(err)
+			}
+		}
+	}
+
 }
 
 type scrapeService struct {
@@ -220,6 +252,9 @@ func discoveryProcess(cmd *cobra.Command, args []string) {
 		}
 
 		discoverSwarm(prometheusContainerID)
+		if clean {
+			cleanNetworks(prometheusContainerID)
+		}
 	}
 }
 
@@ -235,6 +270,7 @@ func main() {
 	cmdDiscover.Flags().IntVarP(&discoveryInterval, "interval", "i", 30, "The interval, in seconds, at which the discovery process is kicked off")
 	cmdDiscover.Flags().StringVarP(&logLevel, "loglevel", "l", "info", "Specify log level: debug, info, warn, error")
 	cmdDiscover.Flags().StringVarP(&output, "output", "o", "swarm-endpoints.json", "Output file that contains the Prometheus endpoints.")
+	cmdDiscover.Flags().BoolVarP(&clean, "clean", "c", true, "Disconnects unused networks from the Prometheus container, and deletes them.")
 
 	var rootCmd = &cobra.Command{Use: "promswarm"}
 	rootCmd.AddCommand(cmdDiscover)

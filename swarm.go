@@ -23,6 +23,7 @@ import (
 var prometheusService string
 var discoveryInterval int
 var logLevel string
+var output string
 var logger = logrus.New()
 
 // allocateIP returns the 3rd last IP in the network range.
@@ -88,7 +89,7 @@ func writeSDConfig(scrapeTasks []scrapeTask) {
 
 	logger.Debug("Writing Prometheus config file")
 
-	err = ioutil.WriteFile("swarm-endpoints.json", jsonScrapeConfig, 0644)
+	err = ioutil.WriteFile(output, jsonScrapeConfig, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -233,6 +234,7 @@ func main() {
 	cmdDiscover.Flags().StringVarP(&prometheusService, "prometheus", "p", "prometheus", "Name of the Prometheus service")
 	cmdDiscover.Flags().IntVarP(&discoveryInterval, "interval", "i", 30, "The interval, in seconds, at which the discovery process is kicked off")
 	cmdDiscover.Flags().StringVarP(&logLevel, "loglevel", "l", "info", "Specify log level: debug, info, warn, error")
+	cmdDiscover.Flags().StringVarP(&output, "output", "o", "swarm-endpoints.json", "Output file that contains the Prometheus endpoints.")
 
 	var rootCmd = &cobra.Command{Use: "promswarm"}
 	rootCmd.AddCommand(cmdDiscover)

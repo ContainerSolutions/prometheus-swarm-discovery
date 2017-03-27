@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  swarm-discover:
+    image: seqvence/prometheus-swarm
+    command: ["-i", "5", "-o", "/swarm-endpoints/swarm-endpoints.json", "-p" , "prometheus_prometheus"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - swarm-endpoints:/swarm-endpoints/
+  prometheus:
+    image: prom/prometheus:v1.5.2
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus-configs/:/etc/prometheus
+      - swarm-endpoints:/etc/swarm-endpoints/
+    command: ["-storage.local.retention=48h", "-storage.local.memory-chunks=1048576", "-config.file=/etc/prometheus/prometheus.yaml"]
+
+volumes:
+  swarm-endpoints:

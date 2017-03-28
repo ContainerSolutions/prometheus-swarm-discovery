@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"reflect"
+	"strconv"
 	"time"
 
 	"strings"
@@ -199,9 +200,23 @@ func discoverSwarm(prometheusContainerID string) {
 				if err != nil {
 					panic(err)
 				}
-				if len(serviceIDMap[task.ServiceID].Spec.EndpointSpec.Ports) > 0 {
-					for _, port := range serviceIDMap[task.ServiceID].Spec.EndpointSpec.Ports {
-						containerIPs = append(containerIPs, fmt.Sprintf("%s:%d", ip.String(), port.TargetPort))
+
+				ports := make(map[int]struct{})
+
+				if portstr, ok := task.Spec.ContainerSpec.Labels["prometheus.port"]; ok {
+					if port, err := strconv.Atoi(portstr); err == nil {
+						ports[port] = struct{}{}
+					}
+				}
+
+				for _, port := range serviceIDMap[task.ServiceID].Spec.EndpointSpec.Ports {
+					ports[int(port.TargetPort)] = struct{}{}
+				}
+
+				if len(ports) > 0 {
+					for port := range ports {
+						logger.Debug("Adding ports ", ports)
+						containerIPs = append(containerIPs, fmt.Sprintf("%s:%d", ip.String(), port))
 					}
 				} else {
 					containerIPs = append(containerIPs, ip.String())

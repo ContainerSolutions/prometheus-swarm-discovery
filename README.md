@@ -1,6 +1,6 @@
 # Prometheus-Swarm service discovery
 
-This is POC that demonstrates Prometheus service discovery in Docker Swarm.
+This is a POC that demonstrates Prometheus service discovery in Docker Swarm.
 
 ## How it works
 

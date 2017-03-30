@@ -9,9 +9,10 @@ services:
       - swarm-endpoints:/swarm-endpoints/
     labels:
         prometheus.ignore: "true"
-    placement:
-      constraints:
-        - node.role == manager
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
   prometheus:
     image: prom/prometheus:v1.5.2
     ports:
@@ -20,9 +21,10 @@ services:
       - ./prometheus-configs/:/etc/prometheus
       - swarm-endpoints:/etc/swarm-endpoints/
     command: ["-storage.local.retention=2h", "-storage.local.memory-chunks=1048576", "-config.file=/etc/prometheus/prometheus.yaml"]
-    placement:
-      constraints:
-        - node.role == manager
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
 
 volumes:
   swarm-endpoints:

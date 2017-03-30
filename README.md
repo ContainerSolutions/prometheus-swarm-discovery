@@ -27,6 +27,41 @@ file.
 $ docker stack deploy -c docker-compose.yaml prometheus
 ```
 
+## Port discovery
+
+By default, Prometheus will use port 80 to connect to a scrape target. But there are 2 ways in which a scrape target can have a different port configured:
+
+* have a port exposed in Docker. That way, the discovery tool can figure out on its own which port to configure for the scrape target.
+* annotate a service using Docker labels. A label with format `prometheus.port: <port_nr>` can be added to each service that requires a custom port configuration.
+
+As an example here is the following Docker Compose service definition that uses this feature:
+
+```
+version: '3'
+
+services:
+  front-end:
+    image: weaveworksdemos/front-end
+    labels:
+        prometheus.port: 8079
+```
+
+## Excluding services
+
+To exclude a specific service from being included in the scrape targets, add a label of format `prometheus.ignore: "true"`.
+
+Example Docker Compose service:
+
+```
+version: '3'
+
+services:
+  front-end:
+    image: weaveworksdemos/front-end
+    labels:
+        prometheus.ignore: "true"
+```
+
 ## Configuration options
 
 ```

@@ -22,12 +22,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var prometheusService string
-var discoveryInterval int
-var logLevel string
-var output string
-var clean bool
 var logger = logrus.New()
+var options = Options{}
 
 // allocateIP returns the 3rd last IP in the network range.
 func allocateIP(netCIDR *net.IPNet) string {
@@ -84,7 +80,7 @@ func connectNetworks(networks map[string]swarm.Network, containerID string) {
 
 }
 
-func writeSDConfig(scrapeTasks []scrapeTask) {
+func writeSDConfig(scrapeTasks []scrapeTask, output string) {
 	jsonScrapeConfig, err := json.MarshalIndent(scrapeTasks, "", "  ")
 	if err != nil {
 		panic(err)
@@ -156,7 +152,7 @@ type scrapeTask struct {
 	Labels  map[string]string
 }
 
-func discoverSwarm(prometheusContainerID string) {
+func discoverSwarm(prometheusContainerID string, outputFile string) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		panic(err)
@@ -236,41 +232,52 @@ func discoverSwarm(prometheusContainerID string) {
 	}
 
 	connectNetworks(taskNetworks, prometheusContainerID)
-	writeSDConfig(scrapeTasks)
+	writeSDConfig(scrapeTasks, outputFile)
 }
 
 func discoveryProcess(cmd *cobra.Command, args []string) {
 
-	if logLevel == "debug" {
+	switch level := options.logLevel; level {
+	case "debug":
 		logger.Level = logrus.DebugLevel
-	} else if logLevel == "info" {
+	case "info":
 		logger.Level = logrus.InfoLevel
-	} else if logLevel == "warn" {
+	case "warn":
 		logger.Level = logrus.WarnLevel
-	} else if logLevel == "error" {
+	case "error":
 		logger.Level = logrus.ErrorLevel
-	} else {
-		logger.Fatal("Invalid log level: ", logLevel)
+	default:
+		logger.Fatal("Invalid log level: ", options.logLevel)
 	}
 
-	logger.Info("Starting service discovery process using Prometheus service [", prometheusService, "]")
+	logger.Info("Starting service discovery process using Prometheus service [", options.prometheusService, "]")
 
 	for {
-		time.Sleep(time.Duration(discoveryInterval) * time.Second)
-		prometheusContainerID, err := findPrometheusContainer(prometheusService)
+		time.Sleep(time.Duration(options.discoveryInterval) * time.Second)
+		prometheusContainerID, err := findPrometheusContainer(options.prometheusService)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
-				logger.Warn("Service ", prometheusService, " not running yet.")
+				logger.Warn("Service ", options.prometheusService, " not running yet.")
 				continue
 			}
 			logger.Fatal(err)
 		}
 
-		discoverSwarm(prometheusContainerID)
-		if clean {
+		discoverSwarm(prometheusContainerID, options.output)
+		if options.clean {
 			cleanNetworks(prometheusContainerID)
 		}
 	}
+}
+
+// Options structure for all the cmd line flags
+type Options struct {
+	prometheusService string
+	discoveryInterval int
+	discovery         string
+	logLevel          string
+	output            string
+	clean             bool
 }
 
 func main() {
@@ -281,11 +288,12 @@ func main() {
 		Run:   discoveryProcess,
 	}
 
-	cmdDiscover.Flags().StringVarP(&prometheusService, "prometheus", "p", "prometheus", "Name of the Prometheus service")
-	cmdDiscover.Flags().IntVarP(&discoveryInterval, "interval", "i", 30, "The interval, in seconds, at which the discovery process is kicked off")
-	cmdDiscover.Flags().StringVarP(&logLevel, "loglevel", "l", "info", "Specify log level: debug, info, warn, error")
-	cmdDiscover.Flags().StringVarP(&output, "output", "o", "swarm-endpoints.json", "Output file that contains the Prometheus endpoints.")
-	cmdDiscover.Flags().BoolVarP(&clean, "clean", "c", true, "Disconnects unused networks from the Prometheus container, and deletes them.")
+	cmdDiscover.Flags().StringVarP(&options.prometheusService, "prometheus", "p", "prometheus", "Name of the Prometheus service")
+	cmdDiscover.Flags().IntVarP(&options.discoveryInterval, "interval", "i", 30, "The interval, in seconds, at which the discovery process is kicked off")
+	cmdDiscover.Flags().StringVarP(&options.logLevel, "loglevel", "l", "info", "Specify log level: debug, info, warn, error")
+	cmdDiscover.Flags().StringVarP(&options.output, "output", "o", "swarm-endpoints.json", "Output file that contains the Prometheus endpoints.")
+	cmdDiscover.Flags().BoolVarP(&options.clean, "clean", "c", true, "Disconnects unused networks from the Prometheus container, and deletes them.")
+	cmdDiscover.Flags().StringVarP(&options.discovery, "discovery", "d", "implicit", "Discovery time: implicit or explicit. Implicit scans all the services found while explicit scans only labeled services.")
 
 	var rootCmd = &cobra.Command{Use: "promswarm"}
 	rootCmd.AddCommand(cmdDiscover)

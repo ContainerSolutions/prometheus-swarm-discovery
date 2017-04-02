@@ -238,9 +238,17 @@ func discoverSwarm(prometheusContainerID string, outputFile string, discoveryTyp
 
 	for _, task := range tasks {
 
-		if _, ok := task.Spec.ContainerSpec.Labels[excludeLabel]; ok {
-			logger.Debugf("Task %s ignored by Prometheus", task.ID)
-			continue
+		if discoveryType == implicit {
+			if _, ok := task.Spec.ContainerSpec.Labels[excludeLabel]; ok {
+				logger.Debugf("Task %s ignored by Prometheus", task.ID)
+				continue
+			}
+		} else if discoveryType == explicit {
+			if _, ok := task.Spec.ContainerSpec.Labels[includeLabel]; ok {
+				logger.Debugf("Task %s should be scanned by Prometheus", task.ID)
+			} else {
+				continue
+			}
 		}
 
 		ports := collectPorts(task, serviceIDMap)
@@ -251,6 +259,8 @@ func discoverSwarm(prometheusContainerID string, outputFile string, discoveryTyp
 			allNetworks[k] = v
 		}
 
+		// if exposed ports are found, or ports defined through labels, add them to the Prometheus target.
+		// if not, add only the container IP as a target, and Prometheus will use the default port (80).
 		for _, ip := range containerIPs {
 			if len(ports) > 0 {
 				for port := range ports {

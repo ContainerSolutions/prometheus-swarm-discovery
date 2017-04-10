@@ -16,6 +16,8 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/util/strutil"
 	"github.com/spf13/cobra"
 )
 
@@ -211,6 +213,23 @@ func collectIPs(task swarm.Task) ([]net.IP, map[string]swarm.Network) {
 	return containerIPs, taskNetworks
 }
 
+func taskLabels(task swarm.Task, serviceIDMap map[string]swarm.Service) map[string]string {
+	service := serviceIDMap[task.ServiceID]
+	labels := map[string]string{
+		model.JobLabel: service.Spec.Name,
+
+		model.MetaLabelPrefix + "docker_task_name":          task.Name,
+		model.MetaLabelPrefix + "docker_task_desired_state": string(task.DesiredState),
+	}
+	for k, v := range task.Labels {
+		labels[strutil.SanitizeLabelName(model.MetaLabelPrefix+"docker_task_label_"+k)] = v
+	}
+	for k, v := range service.Spec.Labels {
+		labels[strutil.SanitizeLabelName(model.MetaLabelPrefix+"docker_service_label_"+k)] = v
+	}
+	return labels
+}
+
 func discoverSwarm(prometheusContainerID string, outputFile string, discoveryType string) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
@@ -275,12 +294,10 @@ func discoverSwarm(prometheusContainerID string, outputFile string, discoveryTyp
 
 		scrapetask := scrapeTask{
 			Targets: taskEndpoints,
-			Labels: map[string]string{
-				"job": serviceIDMap[task.ServiceID].Spec.Name,
-			},
+			Labels:  taskLabels(task, serviceIDMap),
 		}
-		scrapeTasks = append(scrapeTasks, scrapetask)
 
+		scrapeTasks = append(scrapeTasks, scrapetask)
 	}
 
 	err = connectNetworks(allNetworks, prometheusContainerID)

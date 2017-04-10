@@ -1,13 +1,13 @@
 hash: 3441bf6ff6d443d7e65fcdfc4f1d1b67e506cee012ed3b4901bbe2aab9890aa9
-updated: 2017-03-22T13:06:35.250383054+02:00
+updated: 2017-04-09T17:47:36.058090226+02:00
 imports:
 - name: github.com/docker/distribution
-  version: 0700fa570d7bcc1b3e46ee127c4489fd25f4daa3
+  version: 7b9ebdc54fe6c92291f93df4e98dceb16328905d
   subpackages:
   - digestset
   - reference
 - name: github.com/docker/docker
-  version: 57a82c4190e5c87264fbdc2d5703f51ffc26a0b0
+  version: 51aa2a226e21e20c5b4634a28245c760f4e18f37
   subpackages:
   - api
   - api/types
@@ -30,7 +30,7 @@ imports:
   - pkg/system
   - pkg/tlsconfig
 - name: github.com/docker/go-connections
-  version: a2afab9802043837035592f1c24827fb70766de9
+  version: e15c02316c12de00874640cd76311849de2aeed5
   subpackages:
   - nat
   - sockets
@@ -47,20 +47,28 @@ imports:
   version: aa2ec055abd10d26d539eb630a92241b781ce4bc
 - name: github.com/pkg/errors
   version: ff09b135c25aae272398c51a07235b90a75aa4f0
+- name: github.com/prometheus/common
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  subpackages:
+  - model
+- name: github.com/prometheus/prometheus
+  version: acd72ae1a7bf62ef37f69830531666548ce40907
+  subpackages:
+  - util/strutil
 - name: github.com/Sirupsen/logrus
   version: 10f801ebc38b33738c9d17d50860f484a0988ff5
 - name: github.com/spf13/cobra
-  version: 7be4beda01ec05d0b93d80b3facd2b6f44080d94
+  version: 5deb57bbca49eb370538fc295ba4b2988f9f5e09
 - name: github.com/spf13/pflag
-  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+  version: 9a906f17374922ed0f74e1b2f593d3723f2ffb00
 - name: golang.org/x/net
-  version: 7394c112eae4dba7e96bfcfe738e6373d61772b4
+  version: d1e1b351919c6738fdeb9893d5c998b161464f0c
   subpackages:
   - context
   - context/ctxhttp
   - proxy
 - name: golang.org/x/sys
-  version: 99f16d856c9836c42d24e7ab64ea72916925fa97
+  version: f3918c30c5c2cb527c0b071a27c35120a6c0719a
   subpackages:
   - unix
   - windows

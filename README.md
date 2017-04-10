@@ -46,6 +46,16 @@ services:
         prometheus.port: 8079
 ```
 
+## Metadata labels
+
+The discovery tool attaches a set of metadata labels to each target that are available during the [relabeling phase](https://prometheus.io/docs/operating/configuration/#<relabel_config>) of the service discovery in Prometheus:
+
+* `__meta_docker_service_label_<labelname>`: The value of this service label.
+* `__meta_docker_task_label_<labelname>`: The value of this task label.
+* `__meta_docker_task_name`: The name of the Docker task.
+
+Labels starting with `__` are removed after the relabeling phase, so that these labels will not show up on time series directly.
+
 ## Excluding services
 
 To exclude a specific service from being included in the scrape targets, add a label of format `prometheus.ignore: "true"`.

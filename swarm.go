@@ -169,7 +169,7 @@ type scrapeTask struct {
 
 // collectPorts builds a map of ports collected from container exposed ports and/or from ports defined
 // as container labels
-func collectPorts(task swarm.Task, serviceIDMap map[string]swarm.Service) map[int]struct{} {
+func collectPorts(task swarm.Task, serviceIDMap map[string]swarm.Service, discoveryType string) map[int]struct{} {
 
 	ports := make(map[int]struct{})
 
@@ -180,9 +180,13 @@ func collectPorts(task swarm.Task, serviceIDMap map[string]swarm.Service) map[in
 		}
 	}
 
-	// collects exposed ports
-	for _, port := range serviceIDMap[task.ServiceID].Spec.EndpointSpec.Ports {
-		ports[int(port.TargetPort)] = struct{}{}
+	// collects exposed ports, but only if we use implicit discovery
+	if discoveryType == implicit {
+		for _, port := range serviceIDMap[task.ServiceID].Spec.EndpointSpec.Ports {
+			ports[int(port.TargetPort)] = struct{}{}
+		}
+	} else {
+		logger.Debugf("Exposed ports on Service %s ignored by Prometheus", task.ServiceID)
 	}
 
 	return ports
@@ -270,7 +274,7 @@ func discoverSwarm(prometheusContainerID string, outputFile string, discoveryTyp
 			}
 		}
 
-		ports := collectPorts(task, serviceIDMap)
+		ports := collectPorts(task, serviceIDMap, discoveryType)
 		containerIPs, taskNetworks := collectIPs(task)
 		var taskEndpoints []string
 

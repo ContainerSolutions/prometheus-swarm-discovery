@@ -85,6 +85,7 @@ Usage:
 
 Flags:
   -c, --clean               Disconnects unused networks from the Prometheus container, and deletes them. (default true)
+  -d, --discovery           Discovery time: implicit, explicit. Implicit scans all the services found while explicit scans only labeled services. (default "implicit")
   -i, --interval int        The interval, in seconds, at which the discovery process is kicked off (default 30)
   -l, --loglevel string     Specify log level: debug, info, warn, error (default "info")
   -o, --output string       Output file that contains the Prometheus endpoints. (default "swarm-endpoints.json")

@@ -1,5 +1,7 @@
 # Prometheus-Swarm service discovery
 
+*Prometheus now has [native support for Docker Swarm](https://prometheus.io/docs/prometheus/2.20/configuration/configuration/#dockerswarm_sd_config). We have therefore archived this repository.*
+
 This is a POC that demonstrates Prometheus service discovery in Docker Swarm. At the moment, this POC only discovers Swarm services and their respective tasks, without attempting to discover nodes or other Swarm concepts.
 
 ## How it works

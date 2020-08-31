@@ -221,7 +221,7 @@ func taskLabels(task swarm.Task, serviceIDMap map[string]swarm.Service) map[stri
 		model.MetaLabelPrefix + "docker_task_name":          task.Name,
 		model.MetaLabelPrefix + "docker_task_desired_state": string(task.DesiredState),
 	}
-	for k, v := range task.Labels {
+	for k, v := range task.Spec.ContainerSpec.Labels {
 		labels[strutil.SanitizeLabelName(model.MetaLabelPrefix+"docker_task_label_"+k)] = v
 	}
 	for k, v := range service.Spec.Labels {
